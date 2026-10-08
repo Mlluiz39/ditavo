@@ -30,6 +30,22 @@ joga o texto no editor, pronto para copiar/compartilhar.
 Formatos aceitos: `.opus`/`.ogg` (padrão do WhatsApp), além de mp3, m4a, wav,
 webm. No iPhone/Safari o `.ogg` é lido por um decoder WASM embutido.
 
+### 📲 Compartilhar direto (Android)
+
+Com o **app instalado** no Android, o fluxo fica igual ao do Blip — sem baixar
+nada:
+
+> WhatsApp → segure o áudio → **Compartilhar** → **ViraTexto** → ele abre e
+> já transcreve.
+
+Isso funciona via `share_target` no manifesto + service worker: o sistema manda
+o arquivo por POST, o worker guarda e o app lê ao abrir. **Restrições:**
+
+- **iPhone**: o Safari ainda não suporta `share_target` (bug do WebKit
+  194593) → use *Encaminhar como arquivo* → salvar → abrir o app e escolher;
+- **PC (WhatsApp Web)**: não existe folha de compartilhamento do sistema para
+  sites → baixe o áudio e arraste para a janela (ou Ctrl+V).
+
 > O Whisper **não sai do seu dispositivo**: o modelo (~40 MB) é baixado uma vez
 > do Hugging Face, fica cacheado no navegador e as inferências são locais.
 > No celular a primeira vez pode demorar um pouco mais — modelos "Rápido" e
@@ -83,6 +99,7 @@ src/
 │   ├── speech.ts                  # idiomas, suporte, mensagens de erro
 │   ├── text.ts                    # regras de pós-processamento (sem IA)
 │   └── time.ts                    # "há 5 min"
+├── sw.js                          # service worker: offline + share_target
 ├── components/                    # RecordButton, LiveTranscript, AudioDropzone…
 └── types.ts                       # tipos da Web Speech API (não estão no lib.dom)
 ```
@@ -114,5 +131,8 @@ Sem esses headers tudo funciona, só cai para um thread (mais lento).
 - Áudio sem fala (silêncio) volta com aviso — sem texto para adicionar;
 - Modelos muito pequenos erram nomes próprios e termos técnicos: use o modelo
   "Melhor qualidade" quando a precisão importar;
-- Este app não conversa com o WhatsApp automaticamente (seria preciso um bot);
-  o fluxo é *pegar o áudio → soltar aqui → copiar o texto*.
+- No Android o fluxo é *Compartilhar → transcreve*; no iPhone e no PC é
+  *salvar → escolher/arrastar* (limitação do navegador, não do app);
+- Para receber o áudio **dentro** do WhatsApp sem compartilhar nada (estilo
+  bot que responde sozinho), seria preciso um bot de WhatsApp — fora do
+  escopo deste PWA.

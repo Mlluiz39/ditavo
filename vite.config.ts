@@ -16,8 +16,17 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Service worker customizado: além do cache offline, ele recebe o
+      // POST do share_target (folha "Compartilhar" do Android).
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
       manifest: {
         name: 'Blip Vira Texto',
         short_name: 'ViraTexto',
@@ -42,10 +51,32 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // WhatsApp (Android) → Compartilhar → ViraTexto: o SO manda o
+        // arquivo via POST e o service worker entrega ao app.
+        share_target: {
+          action: '/',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            files: [
+              {
+                name: 'audio',
+                accept: [
+                  'audio/*',
+                  'application/ogg',
+                  '.opus',
+                  '.ogg',
+                  '.oga',
+                  '.mp4',
+                  '.m4a',
+                  '.mp3',
+                  '.wav',
+                  '.webm',
+                ],
+              },
+            ],
+          },
+        },
       },
     }),
   ],

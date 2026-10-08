@@ -275,6 +275,16 @@ try {
     await sleep(2000)
   }
   notes.push(`fase final da transcrição: ${phase}`)
+  if (phase !== 'done') {
+    notes.push(
+      `status do dropzone: ${JSON.stringify(
+        (await evaluate(`document.querySelector('.dropzone__status')?.textContent ?? ''`)) ?? '',
+      )}`,
+    )
+    notes.push(
+      `toast: ${JSON.stringify((await evaluate(`document.querySelector('.toast')?.textContent ?? ''`)) ?? '')}`,
+    )
+  }
   check('transcrição do arquivo termina sem erro', phase === 'done', `fase=${phase}`)
 
   if (dropResult === 'silencio') {
@@ -288,6 +298,56 @@ try {
       JSON.stringify(transcript.slice(0, 120)),
     )
   }
+  // 13. share_target: POST simulado como o Android faria (Compartilhar → app)
+  const swControlled = await evaluate(`Boolean(navigator.serviceWorker?.controller)`)
+  check('service worker controla a página', swControlled)
+
+  const shared = await evaluate(`
+    (async () => {
+      try {
+        const res = await fetch('https://upload.wikimedia.org/wikipedia/commons/7/7b/Kim_Kataguiri_e_Arthur_do_Val.ogg')
+        if (!res.ok) return 'sem-amostra'
+        const blob = await res.blob()
+        const fd = new FormData()
+        fd.append('audio', new File([blob], 'AUD-20240101-WA0001.ogg', { type: blob.type || 'application/ogg' }))
+        const response = await fetch('/', { method: 'POST', body: fd })
+        const cache = await caches.open('blip-vira-texto/share-target')
+        const stored = await cache.match('/__shared_audio__')
+        if (response.ok && stored) return 'guardado'
+        return 'falhou status=' + response.status + ' stored=' + Boolean(stored)
+      } catch (err) {
+        return 'erro: ' + err.message
+      }
+    })()
+  `)
+  check('share_target: SW guarda o arquivo enviado', shared === 'guardado', String(shared))
+
+  // 14. Navega para /?share=1 → o app lê o arquivo e transcreve sozinho
+  await cdp.send('Page.navigate', { url: `${APP_URL}?share=1` })
+  await sleep(3000)
+  check(
+    'abre direto na aba de arquivo',
+    await evaluate(
+      `document.querySelector('.mode-tab[aria-selected="true"]')?.textContent.includes('Áudio')`,
+    ),
+  )
+
+  for (let i = 0; i < 90; i++) {
+    phase = (await evaluate(`document.querySelector('.dropzone')?.dataset.phase ?? 'none'`)) ?? ''
+    transcript = (await evaluate(`document.querySelector('.transcript-card__text').value`)) ?? ''
+    if (phase === 'done' || phase === 'error') break
+    await sleep(2000)
+  }
+  notes.push(`share: fase=${phase}`)
+  check(
+    'transcrição automática após compartilhar',
+    phase === 'done' && transcript.trim().length > 0,
+    `fase=${phase} texto=${JSON.stringify(transcript.slice(0, 80))}`,
+  )
+  check(
+    'URL limpa depois do share',
+    await evaluate(`!location.search.includes('share=1')`),
+  )
 } catch (err) {
   failures.push(`exceção: ${err.message}`)
   console.error('ERRO:', err.message)

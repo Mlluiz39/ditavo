@@ -111,6 +111,43 @@ export default function App() {
     return () => window.removeEventListener('paste', onPaste)
   }, [mode, handleAudioFile])
 
+  // Arquivo vindo da folha "Compartilhar" do celular (share_target).
+  // O service worker guardou o áudio e redirecionou para /?share=1.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('share') !== '1') return
+    // Limpa a URL imediatamente: reexecuções do efeito não repetem o fluxo.
+    window.history.replaceState({}, '', window.location.pathname)
+
+    let cancelled = false
+    void (async () => {
+      try {
+        // Espelha SHARE_CACHE/SHARE_KEY de src/sw.js
+        const cache = await caches.open('blip-vira-texto/share-target')
+        const response = await cache.match('/__shared_audio__')
+        if (response) {
+          const blob = await response.blob()
+          const rawName = response.headers.get('X-File-Name')
+          const name = rawName ? decodeURIComponent(rawName) : 'audio'
+          await cache.delete('/__shared_audio__')
+          const file = new File([blob], name, { type: blob.type })
+          if (!cancelled) {
+            setMode('file')
+            await handleAudioFile(file)
+          }
+        } else if (!cancelled) {
+          showToast('Não recebi o arquivo compartilhado')
+        }
+      } catch {
+        if (!cancelled) showToast('Não consegui abrir o arquivo compartilhado')
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [handleAudioFile, showToast])
+
   const handleTextChange = (value: string) => {
     editedRef.current = true
     setText(value)
