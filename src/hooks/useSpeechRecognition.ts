@@ -9,7 +9,7 @@ import {
 import type { SpeechRecognitionLike } from '../types'
 
 /** Espera antes de religar o reconhecimento após ele parar sozinho. */
-const RESTART_DELAY_MS = 300
+const RESTART_DELAY_MS = 1000
 /** Motor que vive menos que isso sem ouvir nada é considerado defeituoso. */
 const MIN_ALIVE_MS = 1500
 /** Reinícios "relâmpago" consecutivos tolerados antes de desistir. */
@@ -59,7 +59,13 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
 
   const recRef = useRef<SpeechRecognitionLike | null>(null)
   const finalsRef = useRef<string[]>([])
+  const sessionFinalsRef = useRef<string[]>([])
   const interimRef = useRef('')
+  const engineStateRef = useRef<'idle' | 'starting' | 'running' | 'stopping'>('idle')
+  const beginRef = useRef<(() => void) | null>(null)
+  const ignoredResultsRef = useRef(0)
+  const resultCountRef = useRef(0)
+  const discardResultsRef = useRef(false)
   /** O usuário quer que esteja ouvindo? Fonte da verdade para toggle. */
   const wantListeningRef = useRef(false)
   const langRef = useRef(DEFAULT_LANG)
@@ -86,42 +92,71 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     rec.maxAlternatives = 1
     rec.lang = langRef.current
 
+    const begin = () => {
+      if (!wantListeningRef.current || engineStateRef.current !== 'idle') return
+      engineStateRef.current = 'starting'
+      startedAtRef.current = Date.now()
+      lastResultAtRef.current = 0
+      sessionFinalsRef.current = []
+      ignoredResultsRef.current = 0
+      resultCountRef.current = 0
+      discardResultsRef.current = false
+      rec.lang = langRef.current
+      try {
+        rec.start()
+      } catch {
+        engineStateRef.current = 'idle'
+        wantListeningRef.current = false
+        setActive(false)
+        setError('Não consegui iniciar o microfone. Tente novamente.')
+      }
+    }
+    beginRef.current = begin
+
     const scheduleRestart = () => {
       clearRestartTimer()
       restartTimerRef.current = window.setTimeout(() => {
         restartTimerRef.current = null
-        if (!wantListeningRef.current) return
-        try {
-          rec.start()
-        } catch {
-          // Já ativo — ignorar InvalidStateError.
-        }
-      }, RESTART_DELAY_MS)
+        begin()
+      }, RESTART_DELAY_MS * 2 ** fastFailRef.current)
     }
 
     rec.onstart = () => {
-      startedAtRef.current = Date.now()
+      if (!wantListeningRef.current || engineStateRef.current === 'stopping') {
+        engineStateRef.current = 'stopping'
+        rec.stop()
+        return
+      }
+      engineStateRef.current = 'running'
       setListening(true)
       setError(null)
     }
 
     rec.onresult = (event) => {
+      if (discardResultsRef.current) return
+      resultCountRef.current = event.results.length
       lastResultAtRef.current = Date.now()
       fastFailRef.current = 0
+
+      const sessionFinals: string[] = []
       let live = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // A lista é cumulativa: substituir os finais da rodada evita
+      // anexar novamente resultados já confirmados.
+      for (let i = ignoredResultsRef.current; i < event.results.length; i++) {
         const result = event.results[i]
         const text = result[0]?.transcript ?? ''
         if (result.isFinal) {
           const trimmed = text.trim()
-          if (trimmed) finalsRef.current.push(trimmed)
+          if (trimmed) sessionFinals.push(trimmed)
         } else {
           live += text
         }
       }
+
+      sessionFinalsRef.current = sessionFinals
       interimRef.current = live
       setInterim(live)
-      setTranscript(finalsRef.current.join(' '))
+      setTranscript([...finalsRef.current, ...sessionFinals].join(' '))
     }
 
     rec.onerror = (event) => {
@@ -135,20 +170,25 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     }
 
     rec.onend = () => {
+      if (engineStateRef.current === 'idle') return
+      engineStateRef.current = 'idle'
       setListening(false)
+
+      // Salva os resultados da rodada atual no histórico global
+      if (sessionFinalsRef.current.length > 0) {
+        finalsRef.current.push(...sessionFinalsRef.current)
+        sessionFinalsRef.current = []
+      }
 
       interimRef.current = ''
       setInterim('')
-      // Para evitar duplicação ou o bug de repetição de palavras, não adicionamos
-      // o 'interim' pendente no finalsRef. A engine da API nativa muitas vezes já resolve
-      // as palavras no 'isFinal' ou repete elas na próxima sessão contínua.
       setTranscript(finalsRef.current.join(' '))
 
       if (!wantListeningRef.current) return
 
       // Proteção contra loop infinito: motor morrendo antes de ouvir nada.
       const aliveFor = Date.now() - startedAtRef.current
-      const heardSomething = lastResultAtRef.current > startedAtRef.current
+      const heardSomething = lastResultAtRef.current !== 0
       if (!heardSomething && aliveFor < MIN_ALIVE_MS) {
         fastFailRef.current += 1
         if (fastFailRef.current >= MAX_FAST_FAILS) {
@@ -181,13 +221,18 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
         // Nada a fazer se o motor já estiver parado.
       }
       recRef.current = null
+      beginRef.current = null
+      engineStateRef.current = 'idle'
     }
   }, [clearRestartTimer])
 
   const start = useCallback(() => {
     const rec = recRef.current
     if (!rec) return
+    if (wantListeningRef.current) return
     const freshSession = !wantListeningRef.current
+    clearRestartTimer()
+    fastFailRef.current = 0
     setError(null)
     wantListeningRef.current = true
     setActive(true)
@@ -195,16 +240,15 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     // por aqui, então não apaga nada durante uma escuta contínua).
     if (freshSession) {
       finalsRef.current = []
+      sessionFinalsRef.current = []
       interimRef.current = ''
       setTranscript('')
       setInterim('')
+      // Uma rodada que ainda está encerrando não pertence à nova gravação.
+      discardResultsRef.current = engineStateRef.current !== 'idle'
     }
-    try {
-      rec.start()
-    } catch {
-      // Já ativo — ignorar InvalidStateError.
-    }
-  }, [])
+    beginRef.current?.()
+  }, [clearRestartTimer])
 
   const stop = useCallback(() => {
     wantListeningRef.current = false
@@ -214,6 +258,8 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     const rec = recRef.current
     if (!rec) return
     try {
+      if (engineStateRef.current === 'idle' || engineStateRef.current === 'stopping') return
+      engineStateRef.current = 'stopping'
       rec.stop()
     } catch {
       // Já parado — ignorar.
@@ -226,14 +272,16 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
   }, [start, stop])
 
   const setLang = useCallback((next: string) => {
+    if (next === langRef.current) return
     langRef.current = next
     setLangState(next)
     const rec = recRef.current
     if (!rec) return
     rec.lang = next
     // Reinicia (via onend) para o novo idioma valer imediatamente.
-    if (wantListeningRef.current) {
+    if (wantListeningRef.current && engineStateRef.current === 'running') {
       try {
+        engineStateRef.current = 'stopping'
         rec.stop()
       } catch {
         // Ignorar — o onend já vai religar.
@@ -242,7 +290,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
   }, [])
 
   const reset = useCallback(() => {
+    // Os eventos seguintes ainda contêm os finais anteriores ao limpar.
+    ignoredResultsRef.current = resultCountRef.current
     finalsRef.current = []
+    sessionFinalsRef.current = []
     interimRef.current = ''
     setTranscript('')
     setInterim('')
