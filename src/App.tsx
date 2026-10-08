@@ -1,20 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AudioDropzone } from './components/AudioDropzone'
 import { HistoryList } from './components/HistoryList'
 import { LiveTranscript } from './components/LiveTranscript'
 import { RecordButton } from './components/RecordButton'
+import { useAudioTranscription } from './hooks/useAudioTranscription'
 import { usePWAInstall } from './hooks/usePWAInstall'
 import { useSpeechRecognition } from './hooks/useSpeechRecognition'
 import { useTranscriptHistory } from './hooks/useTranscriptHistory'
+import { isAudioLike, whisperLanguageFor } from './lib/audio'
 import { LANGUAGES } from './lib/speech'
 import { polishText } from './lib/text'
 import type { HistoryItem } from './types'
 
+type InputMode = 'live' | 'file'
+
 export default function App() {
   const speech = useSpeechRecognition()
   const history = useTranscriptHistory()
+  const audio = useAudioTranscription()
   const { canInstall, install } = usePWAInstall()
 
   const [text, setText] = useState('')
+  const [mode, setMode] = useState<InputMode>('live')
   const [toast, setToast] = useState<string | null>(null)
 
   /** Texto que o editor tinha quando a gravação atual começou. */
@@ -56,6 +63,53 @@ export default function App() {
     editedRef.current = false
     speech.start()
   }
+
+  const switchMode = (next: InputMode) => {
+    if (next === mode) return
+    // Não ficar com o microfone aberto escondido atrás da aba de arquivo.
+    if (next === 'file' && speech.active) speech.stop()
+    setMode(next)
+  }
+
+  const handleAudioFile = useCallback(
+    async (file: File) => {
+      if (!isAudioLike(file)) {
+        showToast('Isso não parece um arquivo de áudio')
+        return
+      }
+      try {
+        const transcribed = await audio.transcribe(file, whisperLanguageFor(speech.lang))
+        if (!transcribed) {
+          showToast('Áudio lido, mas não encontrei fala nele')
+          return
+        }
+        editedRef.current = true
+        setText((current) =>
+          current.trim() ? `${current.trimEnd()}\n\n${transcribed}` : transcribed,
+        )
+        showToast('Áudio transcrito e adicionado ao texto!')
+      } catch (err) {
+        showToast(
+          err instanceof Error && err.message ? err.message : 'Erro ao transcrever o áudio',
+        )
+      }
+    },
+    [audio, speech.lang, showToast],
+  )
+
+  // Colar (Ctrl+V) um arquivo de áudio enquanto a aba de arquivo está aberta.
+  useEffect(() => {
+    if (mode !== 'file') return
+    const onPaste = (event: ClipboardEvent) => {
+      const file = event.clipboardData?.files?.[0]
+      if (file) {
+        event.preventDefault()
+        void handleAudioFile(file)
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [mode, handleAudioFile])
 
   const handleTextChange = (value: string) => {
     editedRef.current = true
@@ -242,11 +296,33 @@ export default function App() {
       </header>
 
       <main className="main">
-        {!speech.supported ? (
+        <nav className="mode-tabs" role="tablist" aria-label="Modo de entrada">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'live'}
+            className={`mode-tab${mode === 'live' ? ' is-active' : ''}`}
+            onClick={() => switchMode('live')}
+          >
+            🎤 Falar agora
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'file'}
+            className={`mode-tab${mode === 'file' ? ' is-active' : ''}`}
+            onClick={() => switchMode('file')}
+          >
+            📁 Áudio do WhatsApp
+          </button>
+        </nav>
+
+        {mode === 'live' && !speech.supported ? (
           <div className="banner" role="alert">
             <strong>Este navegador não tem ditado nativo (Web Speech API).</strong>
             Abra no Chrome, Edge ou Safari para falar. Por aqui você pode digitar e
-            editar o texto normalmente.
+            editar o texto normalmente — e a aba <em>Áudio do WhatsApp</em> funciona
+            mesmo assim.
           </div>
         ) : null}
 
@@ -258,21 +334,36 @@ export default function App() {
           onChange={handleTextChange}
         />
 
-        <div className="record-area">
-          <RecordButton
-            listening={speech.active}
-            disabled={!speech.supported}
-            onToggle={handleToggle}
-          />
-          <p className="record-area__hint" aria-live="polite">
-            {statusHint}
-          </p>
-          {speech.error ? (
-            <p className="record-area__error" role="alert">
-              {speech.error}
+        {mode === 'live' ? (
+          <div className="record-area">
+            <RecordButton
+              listening={speech.active}
+              disabled={!speech.supported}
+              onToggle={handleToggle}
+            />
+            <p className="record-area__hint" aria-live="polite">
+              {statusHint}
             </p>
-          ) : null}
-        </div>
+            {speech.error ? (
+              <p className="record-area__error" role="alert">
+                {speech.error}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <AudioDropzone
+            state={audio.state}
+            model={audio.model}
+            busy={
+              audio.state.phase === 'decoding' ||
+              audio.state.phase === 'loading-model' ||
+              audio.state.phase === 'downloading' ||
+              audio.state.phase === 'transcribing'
+            }
+            onModelChange={audio.setModel}
+            onFile={(file) => void handleAudioFile(file)}
+          />
+        )}
 
         <div className="toolbar" aria-label="Ações do texto">
           <button

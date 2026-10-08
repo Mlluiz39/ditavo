@@ -591,6 +591,195 @@ textarea {
   }
 }
 
+/* ---------- Modo de entrada (abas) ---------- */
+.mode-tabs {
+  display: flex;
+  gap: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0.3rem;
+}
+
+.mode-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mode-tab:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.mode-tab.is-active {
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+}
+
+/* ---------- Dropzone de arquivo ---------- */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: center;
+  background: var(--surface);
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.2rem;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.dropzone.is-dragging {
+  border-color: var(--accent-1);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.dropzone__icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.dropzone__title {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.dropzone__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 54ch;
+}
+
+.dropzone__hint--ok {
+  color: #86efac;
+  font-size: 0.78rem;
+}
+
+.dropzone__model {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding-top: 0.2rem;
+}
+
+.btn.is-active {
+  border-color: rgba(59, 130, 246, 0.7);
+  background: rgba(59, 130, 246, 0.18);
+  color: #fff;
+}
+
+.dropzone__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  font-size: 0.86rem;
+}
+
+.dropzone__status-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.dropzone__status--error {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+}
+
+.dropzone__status--done {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+  color: #86efac;
+}
+
+.dropzone__file {
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.dropzone progress {
+  width: min(260px, 100%);
+  height: 8px;
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dropzone progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dropzone progress::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  border-radius: 999px;
+}
+
+.dropzone progress::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  border-radius: 999px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-1);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .mode-tab {
+    font-size: 0.84rem;
+    padding: 0.6rem 0.5rem;
+  }
+
+  .dropzone {
+    padding: 1.2rem 0.9rem;
+  }
+}
+
 /* ---------- Acessibilidade / telas pequenas ---------- */
 :focus-visible {
   outline: 2px solid var(--accent-1);

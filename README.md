@@ -1,23 +1,39 @@
 # Blip Vira Texto 🎙️➡️📝
 
-Fale e receba o texto. App de **transcrição de voz ao vivo** (estilo "áudio vira texto")
-que roda **100% no seu dispositivo**, sem servidor, sem conta e sem API paga.
+Transforma voz em texto — **no seu dispositivo, de graça e sem servidor**.
+Inspirado no bot *Blip Vira Texto* (+55 31 7228-0540), mas sem depender de
+terceiros: aqui quem transcreve é o seu próprio navegador.
 
-Construído como **PWA**: abre no navegador e também pode ser **instalado no celular
-(Android e iOS)** como app de tela cheia.
+App **PWA**: abre no navegador e pode ser **instalado no celular** (Android e
+iOS) como app de tela cheia.
 
-## Como funciona
+## Dois modos de entrada
 
-| Parte | Tecnologia |
+### 🎤 Falar ao vivo
+Você fala no microfone e o texto aparece em tempo real (Web Speech API nativa —
+sem chave, sem custo, sem IA de terceiros). Ideal para ditar respostas e colar
+no WhatsApp.
+
+### 📁 Áudio do WhatsApp
+Você pega o áudio da conversa e **solta aqui** (ou escolhe o arquivo) — o app
+transcreve com **Whisper local** (roda em WebAssembly no próprio navegador) e
+joga o texto no editor, pronto para copiar/compartilhar.
+
+**Como pegar o áudio:**
+
+| Onde | Caminho |
 |---|---|
-| Reconhecimento de voz | **Web Speech API** nativa do navegador (grátis, sem chave) |
-| Interface | React 19 + Vite 8 + TypeScript |
-| PWA (instalável + offline) | vite-plugin-pwa (service worker + manifest) |
-| Persistência | `localStorage` (histórico fica no dispositivo) |
-| "Melhorar texto" | Regras puras de pós-processamento — **sem IA** |
+| WhatsApp Web / Computador | menu ⋮ do áudio → **Baixar** (ou Exportar conversa → ZIP) |
+| Android | segure o áudio → **Compartilhar** → *Encaminhar como arquivo* → salve em Arquivos |
+| iPhone | segure o áudio → **Encaminhar** → salve em Arquivos/Drive |
 
-Nenhum áudio sai do seu aparelho: quem transcreve é o próprio navegador
-(Chrome/Edge usam o serviço de voz deles; no celular, o reconhecedor do sistema).
+Formatos aceitos: `.opus`/`.ogg` (padrão do WhatsApp), além de mp3, m4a, wav,
+webm. No iPhone/Safari o `.ogg` é lido por um decoder WASM embutido.
+
+> O Whisper **não sai do seu dispositivo**: o modelo (~40 MB) é baixado uma vez
+> do Hugging Face, fica cacheado no navegador e as inferências são locais.
+> No celular a primeira vez pode demorar um pouco mais — modelos "Rápido" e
+> "Melhor qualidade" são trocáveis no app.
 
 ## Rodando
 
@@ -28,9 +44,9 @@ npm run build      # gera dist/ (com service worker)
 npm run preview    # serve o build em http://localhost:4173
 ```
 
-Para falar pelo microfone é preciso `http://localhost` ou **HTTPS** (regra do navegador).
+O microfone exige `http://localhost` ou **HTTPS** (regra do navegador).
 
-## Scripts úteis
+## Scripts
 
 ```bash
 npm run icons   # regenera os PNGs do ícone a partir do SVG
@@ -38,47 +54,65 @@ npm run smoke   # teste de integração no Chrome headless (requer preview rodan
 npm run lint    # oxlint
 ```
 
-## Funcionalidades
+## Recursos
 
-- **Gravação contínua** com transcrição ao vivo (palavras ainda não confirmadas
-  aparecem em itálico com a etiqueta "ao vivo");
-- Se o navegador parar de ouvir por silêncio, ele **religa sozinho**;
-- Texto **editável** durante e depois da transcrição;
-- **Melhorar texto**: regras locais que removem repetições ("eu eu vou" → "eu vou"),
-  colapsam pontuação duplicada e capitalizam frases;
-- **Histórico** salvo no dispositivo com copiar / usar / compartilhar / excluir,
-  e exportação em `.txt`;
-- **Compartilhar** usa a Web Share API (no celular abre a folha de compartilhamento
-  nativa; no desktop, cai para copiar);
-- Seletor de idioma (pt-BR, pt-PT, en, es, fr, it, de);
-- Botão **Instalar app** quando o navegador oferece;
-- Funciona **offline** depois da primeira visita (o que já foi cacheado).
+- Transcrição ao vivo com trecho "ao vivo" (interim) e religação automática
+  após silêncio;
+- Transcrição de arquivos de áudio com Whisper local (decode + inferência no
+  navegador, modelo em cache);
+- Texto **editável**, com **Melhorar texto** (regras puras: remove repetições,
+  ajusta pontuação e maiúsculas — sem IA);
+- **Histórico** em localStorage com copiar / usar / compartilhar / excluir e
+  exportação `.txt`;
+- **Compartilhar** nativo (Web Share API) e botão **Instalar app**;
+- Idiomas: pt-BR, pt-PT, en, es, fr, it, de;
+- **Offline** depois da primeira visita (interface e modelo cacheados).
 
 ## Estrutura
 
 ```
 src/
-├── App.tsx                        # composição, ações (copiar/salvar/compartilhar)
+├── App.tsx                        # abas de modo, ações, integração
 ├── hooks/
 │   ├── useSpeechRecognition.ts    # Web Speech API: ciclo de vida, restart, erros
+│   ├── useAudioTranscription.ts   # Whisper local: pipeline, download, progresso
 │   ├── useTranscriptHistory.ts    # histórico em localStorage
 │   └── usePWAInstall.ts           # botão instalar (beforeinstallprompt)
 ├── lib/
+│   ├── audio.ts                   # decode ogg/opus/wav → mono 16 kHz
 │   ├── speech.ts                  # idiomas, suporte, mensagens de erro
 │   ├── text.ts                    # regras de pós-processamento (sem IA)
 │   └── time.ts                    # "há 5 min"
-├── components/                    # RecordButton, LiveTranscript, HistoryList
+├── components/                    # RecordButton, LiveTranscript, AudioDropzone…
 └── types.ts                       # tipos da Web Speech API (não estão no lib.dom)
 ```
 
-## Navegadores suportados
+## Navegadores
 
-Web Speech API: **Chrome**, **Edge**, **Safari** (desktop e iOS ≥ 14.5) e
-navegadores **baseados no Chrome** no Android. Firefox desktop não suporta —
-o app detecta e mostra um aviso, permitindo digitação manual.
+- **Modo ao vivo** (Web Speech API): Chrome, Edge, Safari (desktop/iOS ≥ 14.5) e
+  navegadores Chrome no Android. Firefox não tem — o app avisa e permite digitar.
+- **Modo arquivo** (Whisper): qualquer navegador moderno com WebAssembly
+  (Chrome, Edge, Firefox, Safari).
 
 ## Deploy
 
 Qualquer host estático (Netlify, Vercel, GitHub Pages, Cloudflare Pages):
-faça `npm run build` e publique a pasta `dist/`. É obrigatório HTTPS em domínio
-próprio para o microfone funcionar.
+`npm run build` e publique `dist/`. Microfone exige HTTPS em domínio próprio.
+
+Para o Whisper rodar com **mais threads** (transcrição mais rápida), configure
+os mesmos headers usados no `vite.config.ts`:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: credentialless
+```
+
+Sem esses headers tudo funciona, só cai para um thread (mais lento).
+
+## Limitações
+
+- Áudio sem fala (silêncio) volta com aviso — sem texto para adicionar;
+- Modelos muito pequenos erram nomes próprios e termos técnicos: use o modelo
+  "Melhor qualidade" quando a precisão importar;
+- Este app não conversa com o WhatsApp automaticamente (seria preciso um bot);
+  o fluxo é *pegar o áudio → soltar aqui → copiar o texto*.

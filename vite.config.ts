@@ -3,6 +3,15 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+
+// crossOriginIsolated libera SharedArrayBuffer → o Whisper (WASM) roda com
+// vários threads e transcreve bem mais rápido. Só afeta dev/preview: em
+// produção, configure os mesmos headers no seu host (ver README).
+const isolationHeaders = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'credentialless',
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -40,4 +49,10 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    headers: isolationHeaders,
+  },
+  preview: {
+    headers: isolationHeaders,
+  },
 })

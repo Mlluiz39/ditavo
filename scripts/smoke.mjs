@@ -192,6 +192,102 @@ try {
   await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Limpar')?.click()`)
   await sleep(200)
   check('limpar zera o editor', (await evaluate(`document.querySelector('.transcript-card__text').value`)) === '')
+
+  // 10. Headers de isolamento (permitem Whisper multithread)
+  check(
+    'crossOriginIsolated (WASM multithread)',
+    await evaluate(`crossOriginIsolated === true`),
+  )
+
+  // 11. Aba "Áudio do WhatsApp" mostra a dropzone
+  await evaluate(
+    `[...document.querySelectorAll('.mode-tab')].find(b => b.textContent.includes('Áudio do WhatsApp'))?.click()`,
+  )
+  await sleep(300)
+  check('dropzone aparece na aba de arquivo', await evaluate(`Boolean(document.querySelector('.dropzone'))`))
+
+  // 12. Soltar um áudio de verdade → transcreve com Whisper local
+  const dropResult = await evaluate(`
+    (async () => {
+      const candidates = [
+        {
+          id: 'pt',
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7b/Kim_Kataguiri_e_Arthur_do_Val.ogg',
+          name: 'mensagem-de-voz.ogg',
+          type: 'application/ogg',
+        },
+        {
+          id: 'jfk',
+          url: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav',
+          name: 'mensagem-de-voz.wav',
+          type: 'audio/wav',
+        },
+      ]
+      let blob = null
+      let name = 'mensagem-de-voz.wav'
+      let type = 'audio/wav'
+      let source = 'silencio'
+      for (const candidate of candidates) {
+        try {
+          const res = await fetch(candidate.url)
+          if (res.ok) {
+            blob = await res.blob()
+            name = candidate.name
+            type = candidate.type
+            source = candidate.id
+            break
+          }
+        } catch {}
+      }
+      if (!blob) {
+        // Fallback offline: WAV mono 16 kHz com 1 s de silêncio
+        const rate = 16000, len = rate
+        const buf = new ArrayBuffer(44 + len * 2)
+        const view = new DataView(buf)
+        const ws = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)) }
+        ws(0, 'RIFF'); view.setUint32(4, 36 + len * 2, true); ws(8, 'WAVEfmt ')
+        view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true)
+        view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true)
+        view.setUint16(32, 2, true); view.setUint16(34, 16, true)
+        ws(36, 'data'); view.setUint32(40, len * 2, true)
+        blob = new Blob([buf], { type: 'audio/wav' })
+      }
+      const file = new File([blob], name, { type })
+      const dt = new DataTransfer()
+      dt.items.add(file)
+      document.querySelector('.dropzone').dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }))
+      return source
+    })()
+  `)
+  check(
+    'dispara a transcrição do arquivo',
+    ['pt', 'jfk', 'silencio'].includes(dropResult),
+    String(dropResult),
+  )
+
+  // Aguarda o modelo baixar + inferência (pode demorar na primeira vez)
+  let phase = ''
+  let transcript = ''
+  for (let i = 0; i < 150; i++) {
+    phase = (await evaluate(`document.querySelector('.dropzone')?.dataset.phase ?? 'none'`)) ?? ''
+    transcript = (await evaluate(`document.querySelector('.transcript-card__text').value`)) ?? ''
+    if (phase === 'done' || phase === 'error') break
+    await sleep(2000)
+  }
+  notes.push(`fase final da transcrição: ${phase}`)
+  check('transcrição do arquivo termina sem erro', phase === 'done', `fase=${phase}`)
+
+  if (dropResult === 'silencio') {
+    check('pipeline roda mesmo sem rede (fallback silêncio)', phase === 'done')
+  } else {
+    check(
+      dropResult === 'pt'
+        ? 'Whisper transcreve fala em português'
+        : 'Whisper transcreve fala real (JFK)',
+      transcript.trim().length > 0,
+      JSON.stringify(transcript.slice(0, 120)),
+    )
+  }
 } catch (err) {
   failures.push(`exceção: ${err.message}`)
   console.error('ERRO:', err.message)
