@@ -137,11 +137,11 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     rec.onend = () => {
       setListening(false)
 
-      // Não perder palavras presas no "interim" ao encerrar a rodada.
-      const pending = interimRef.current.trim()
-      if (pending) finalsRef.current.push(pending)
       interimRef.current = ''
       setInterim('')
+      // Para evitar duplicação ou o bug de repetição de palavras, não adicionamos
+      // o 'interim' pendente no finalsRef. A engine da API nativa muitas vezes já resolve
+      // as palavras no 'isFinal' ou repete elas na próxima sessão contínua.
       setTranscript(finalsRef.current.join(' '))
 
       if (!wantListeningRef.current) return
