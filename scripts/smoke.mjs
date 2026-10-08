@@ -190,6 +190,8 @@ try {
     `JSON.parse(localStorage.getItem('blip-vira-texto/history/v1') ?? '[]').length`,
   )
   check('salva no histórico (localStorage)', saved === 1, `itens=${saved}`)
+  await evaluate(`document.querySelector('.history-toggle').click()`)
+  await sleep(100)
   check('histórico aparece na tela', await evaluate(`document.querySelectorAll('.history__item').length === 1`))
 
   // 5. "Melhorar texto" aplica as regras
@@ -204,6 +206,8 @@ try {
   // 7. Recarregar mantém histórico
   await cdp.send('Page.navigate', { url: APP_URL })
   await sleep(1800)
+  await evaluate(`document.querySelector('.history-toggle').click()`)
+  await sleep(100)
   check('histórico persiste após reload', await evaluate(`document.querySelectorAll('.history__item').length === 1`))
 
   // 8. Botão de gravação não pode explodir (mic indisponível em headless é esperado)
@@ -212,7 +216,7 @@ try {
   const stillAlive = await evaluate(`Boolean(document.querySelector('.transcript-card__text'))`)
   check('clicar em gravar não quebra a página', stillAlive)
   const status = await evaluate(
-    `document.querySelector('.record-area__hint')?.textContent ?? ''`,
+    `document.querySelector('.capture-status__head span:last-child')?.textContent ?? ''`,
   )
   const error = await evaluate(`document.querySelector('.record-area__error')?.textContent ?? ''`)
   notes.push(`status pós-gravação: "${status}" | erro: "${error}" || (nenhum)`)
@@ -223,7 +227,7 @@ try {
   )
 
   // 9. Limpar zera o editor
-  await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Limpar')?.click()`)
+  await evaluate(`document.querySelector('button[aria-label="Limpar"]')?.click()`)
   await sleep(200)
   check('limpar zera o editor', (await evaluate(`document.querySelector('.transcript-card__text').value`)) === '')
 
@@ -233,9 +237,9 @@ try {
     await evaluate(`crossOriginIsolated === true`),
   )
 
-  // 11. Aba "Áudio do WhatsApp" mostra a dropzone
+  // 11. Aba de importação mostra a dropzone
   await evaluate(
-    `[...document.querySelectorAll('.mode-tab')].find(b => b.textContent.includes('Áudio do WhatsApp'))?.click()`,
+    `[...document.querySelectorAll('.mode-tab')].find(b => b.textContent.includes('Importar áudio'))?.click()`,
   )
   await sleep(300)
   check('dropzone aparece na aba de arquivo', await evaluate(`Boolean(document.querySelector('.dropzone'))`))
@@ -376,7 +380,7 @@ try {
   check(
     'abre direto na aba de arquivo',
     await evaluate(
-      `document.querySelector('.mode-tab[aria-selected="true"]')?.textContent.includes('Áudio')`,
+      `document.querySelector('.mode-tab[aria-selected="true"]')?.textContent.includes('Importar áudio')`,
     ),
   )
 

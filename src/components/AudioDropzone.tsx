@@ -74,10 +74,12 @@ export function AudioDropzone({
       data-phase={state.phase}
     >
       <span className="dropzone__icon" aria-hidden="true">
-        🎵
+        <svg viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M19 5H7v22h18V11l-6-6Z M19 5v6h6 M12 16h8 M12 21h8" />
+        </svg>
       </span>
       <strong className="dropzone__title">
-        Solte aqui o áudio do WhatsApp (ou clique para escolher)
+        Uma conversa também pode virar texto.
       </strong>
 
       <button
@@ -108,7 +110,7 @@ export function AudioDropzone({
         <em>Encaminhar como arquivo</em> → salve em Arquivos e escolha aqui.
       </p>
       <p className="dropzone__hint dropzone__hint--ok">
-        🔒 O áudio não sai do seu dispositivo: a transcrição roda no seu navegador
+        O áudio não sai do seu dispositivo: a transcrição roda no seu navegador
         (modelo Whisper baixado uma única vez).
       </p>
 

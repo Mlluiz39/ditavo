@@ -4,7 +4,7 @@ interface RecordButtonProps {
   onToggle: () => void
 }
 
-/** Botão redondo grande: microfone parado / quadrado de parar quando ouvindo. */
+/** Controle principal do ditado, com ícone e rótulo visível. */
 export function RecordButton({ listening, disabled, onToggle }: RecordButtonProps) {
   return (
     <button
@@ -15,8 +15,6 @@ export function RecordButton({ listening, disabled, onToggle }: RecordButtonProp
       aria-pressed={listening}
       aria-label={listening ? 'Parar de ouvir' : 'Começar a falar'}
     >
-      <span className="record-btn__pulse" aria-hidden="true" />
-      <span className="record-btn__pulse record-btn__pulse--late" aria-hidden="true" />
       <span className="record-btn__face" aria-hidden="true">
         {listening ? (
           <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor">
@@ -29,6 +27,7 @@ export function RecordButton({ listening, disabled, onToggle }: RecordButtonProp
           </svg>
         )}
       </span>
+      <span>{listening ? 'Gravando' : 'Gravar'}</span>
     </button>
   )
 }

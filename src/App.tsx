@@ -1,3 +1,5 @@
+import { Icon } from './components/Icon'
+import { countWords } from './lib/text'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AudioDropzone } from './components/AudioDropzone'
 import { HistoryList } from './components/HistoryList'
@@ -39,7 +41,16 @@ export default function App() {
     }
   })
   const [mode, setMode] = useState<InputMode>('live')
+  const [elapsed, setElapsed] = useState(0)
+  const [showHistory, setShowHistory] = useState(false)
+  const [largeText, setLargeText] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!speech.listening) return
+    const timer = window.setInterval(() => setElapsed(value => value + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [speech.listening])
 
   // Persiste o rascunho (debounce): uma recarga — inclusive a automática
   // pós-deploy — não pode perder o texto que o usuário já tem na tela.
@@ -89,6 +100,7 @@ export default function App() {
       speech.stop()
       return
     }
+    setElapsed(0)
     baseRef.current = text
     editedRef.current = false
     speech.start()
@@ -332,9 +344,6 @@ export default function App() {
     if (result === 'accepted') showToast('App instalado!')
   }
 
-  const langLabel =
-    LANGUAGES.find((entry) => entry.code === speech.lang)?.label ?? speech.lang
-
   const statusHint = !speech.supported
     ? 'Ditado indisponível neste navegador — você ainda pode digitar'
     : speech.listening
@@ -347,32 +356,13 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="app__glow" aria-hidden="true" />
 
       <header className="topbar">
         <div className="brand">
-          <span className="brand__logo" aria-hidden="true">
-            <svg viewBox="0 0 48 48" width="40" height="40">
-              <defs>
-                <linearGradient id="brandGradient" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" />
-                  <stop offset="100%" stopColor="#8b5cf6" />
-                </linearGradient>
-              </defs>
-              <rect width="48" height="48" rx="14" fill="url(#brandGradient)" />
-              <path
-                d="M24 27a4 4 0 0 0 4-4V15a4 4 0 0 0-8 0v8a4 4 0 0 0 4 4z"
-                fill="#fff"
-              />
-              <path
-                d="M31 23a7 7 0 0 1-14 0h-2a9 9 0 0 0 8 8.94V35h2v-3.06A9 9 0 0 0 33 23h-2z"
-                fill="#fff"
-              />
-            </svg>
-          </span>
+          <span className="brand__logo" aria-hidden="true">d.</span>
           <div className="brand__text">
             <strong>ditavo</strong>
-            <span>fale, edite e compartilhe — sem conta e sem API paga</span>
+            <span><i className={`status-dot${speech.listening ? ' is-live' : ''}`} />{speech.listening ? 'Microfone ativo' : 'Da voz ao papel.'}</span>
           </div>
         </div>
 
@@ -400,6 +390,11 @@ export default function App() {
       </header>
 
       <main className="main">
+        <div className="session-meta" aria-label="Informações da transcrição">
+          <span className="session-meta__time">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}</span>
+          <span>{countWords(text)} palavras</span>
+          <span className="session-meta__mode">{mode === 'live' ? 'Ditado ao vivo' : 'Arquivo de áudio'}</span>
+        </div>
         <nav className="mode-tabs" role="tablist" aria-label="Modo de entrada">
           <button
             type="button"
@@ -408,7 +403,7 @@ export default function App() {
             className={`mode-tab${mode === 'live' ? ' is-active' : ''}`}
             onClick={() => switchMode('live')}
           >
-            🎤 Falar agora
+            <span className="mode-tab__number" aria-hidden="true">01</span> Falar agora
           </button>
           <button
             type="button"
@@ -417,7 +412,7 @@ export default function App() {
             className={`mode-tab${mode === 'file' ? ' is-active' : ''}`}
             onClick={() => switchMode('file')}
           >
-            📁 Áudio do WhatsApp
+            <span className="mode-tab__number" aria-hidden="true">02</span> Importar áudio
           </button>
         </nav>
 
@@ -425,7 +420,7 @@ export default function App() {
           <div className="banner" role="alert">
             <strong>Este navegador não tem ditado nativo (Web Speech API).</strong>
             Abra no Chrome, Edge ou Safari para falar. Por aqui você pode digitar e
-            editar o texto normalmente — e a aba <em>Áudio do WhatsApp</em> funciona
+            editar o texto normalmente — e a aba <em>Importar áudio</em> funciona
             mesmo assim.
           </div>
         ) : null}
@@ -434,85 +429,37 @@ export default function App() {
           text={text}
           interim={speech.interim}
           listening={speech.listening}
-          langLabel={langLabel}
+          largeText={largeText}
           onChange={handleTextChange}
+          onPolish={handlePolish}
+          onCopy={() => handleCopy(text)}
+          onShare={() => handleShare(text)}
+          onClear={handleClear}
+          onFontToggle={() => setLargeText(value => !value)}
         />
 
-        {mode === 'live' ? (
-          <div className="record-area">
-            <RecordButton
-              listening={speech.active}
-              disabled={!speech.supported}
-              onToggle={handleToggle}
-            />
-            <p className="record-area__hint" aria-live="polite">
-              {statusHint}
-            </p>
-            {speech.error ? (
-              <p className="record-area__error" role="alert">
-                {speech.error}
-              </p>
-            ) : null}
-          </div>
-        ) : (
+        {mode === 'file' ? (
           <AudioDropzone
             state={audio.state}
             model={audio.model}
-            busy={
-              audio.state.phase === 'decoding' ||
-              audio.state.phase === 'loading-model' ||
-              audio.state.phase === 'downloading' ||
-              audio.state.phase === 'transcribing'
-            }
+            busy={['decoding', 'loading-model', 'downloading', 'transcribing'].includes(audio.state.phase)}
             onModelChange={audio.setModel}
             onFile={(file) => void handleAudioFile(file)}
           />
+        ) : (
+          <div className={`capture-status${speech.listening ? ' is-live' : ''}`}>
+            <div className="capture-status__head"><span>Microfone</span><span aria-live="polite">{statusHint}</span></div>
+            <div className="capture-status__bars" aria-hidden="true">
+              {Array.from({ length: 40 }, (_, index) => <i key={index} style={{ animationDelay: `${index % 7 * .13}s` }} />)}
+            </div>
+          </div>
         )}
+        {speech.error && mode === 'live' ? <p className="record-area__error" role="alert">{speech.error}</p> : null}
 
-        <div className="toolbar" aria-label="Ações do texto">
-          <button
-            type="button"
-            className="btn"
-            onClick={() => handleCopy(text)}
-            disabled={!hasText}
-          >
-            Copiar
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => handleShare(text)}
-            disabled={!hasText}
-          >
-            Compartilhar
-          </button>
-          <button
-            type="button"
-            className="btn btn--accent"
-            onClick={handleSave}
-            disabled={!hasText}
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={handlePolish}
-            disabled={!hasText}
-            title="Remove repetições e ajusta pontuação (só regras, sem IA)"
-          >
-            Melhorar texto
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={handleClear}
-            disabled={!hasText && !speech.transcript}
-          >
-            Limpar
-          </button>
-        </div>
-
+        <button type="button" className="history-toggle" aria-expanded={showHistory} onClick={() => setShowHistory(value => !value)}>
+          <Icon name="history" /> Textos salvos <span>{history.items.length}</span><span className="history-toggle__arrow">{showHistory ? '−' : '+'}</span>
+        </button>
+        {showHistory ? (
         <HistoryList
           items={history.items}
           onRestore={handleRestore}
@@ -525,13 +472,22 @@ export default function App() {
           }}
           onDownloadAll={handleDownloadAll}
         />
+        ) : null}
       </main>
 
-      <footer className="footer">
-        <p>
-          Tudo roda <strong>no seu dispositivo</strong> com a Web Speech API nativa —
-          sem servidor, sem custo, sem enviar seus áudios para lugar nenhum.
-        </p>
+      <footer className="record-dock" aria-label="Controles de gravação">
+        <div className="record-dock__inner">
+          <div className="record-dock__side">
+            <button type="button" className="dock-action" onClick={() => switchMode(mode === 'file' ? 'live' : 'file')}><span><Icon name={mode === 'file' ? 'edit' : 'folder'} /></span>{mode === 'file' ? 'Ditado' : 'Importar'}</button>
+            <button type="button" className="dock-action" disabled={!speech.supported || mode === 'file'} onClick={handleToggle}><span><Icon name={speech.active ? 'pause' : 'play'} /></span>{speech.active ? 'Pausar' : 'Retomar'}</button>
+          </div>
+          <div className="record-area">
+            <RecordButton listening={speech.active} disabled={!speech.supported || mode === 'file'} onToggle={handleToggle} />
+          </div>
+          <div className="record-dock__side record-dock__side--end">
+            <button type="button" className="dock-action" disabled={!hasText} onClick={handleSave}><span><Icon name="save" /></span>Salvar</button>
+          </div>
+        </div>
       </footer>
 
       {toast ? (

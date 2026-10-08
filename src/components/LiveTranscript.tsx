@@ -1,11 +1,15 @@
-import { useLayoutEffect, useRef } from 'react'
-import { countWords } from '../lib/text'
+import { Icon } from './Icon'
 
 interface LiveTranscriptProps {
   text: string
   interim: string
   listening: boolean
-  langLabel: string
+  largeText: boolean
+  onPolish: () => void
+  onCopy: () => void
+  onShare: () => void
+  onClear: () => void
+  onFontToggle: () => void
   onChange: (value: string) => void
 }
 
@@ -14,37 +18,30 @@ export function LiveTranscript({
   text,
   interim,
   listening,
-  langLabel,
+  largeText, onPolish, onCopy, onShare, onClear, onFontToggle,
   onChange,
 }: LiveTranscriptProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  // Cresce junto com o conteúdo (com teto para não estourar a tela).
-  useLayoutEffect(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  }, [text])
-
-  const words = countWords(text)
+  const hasText = Boolean(text.trim())
 
   return (
-    <section className="transcript-card" aria-label="Transcrição">
+    <section className={`transcript-card${largeText ? ' is-large-text' : ''}`} aria-label="Transcrição">
       <header className="transcript-card__head">
         <span className={`status-dot${listening ? ' is-live' : ''}`} aria-hidden="true" />
-        <h2>Transcrição</h2>
-        <span className="transcript-card__meta">
-          {words} {words === 1 ? 'palavra' : 'palavras'} · {langLabel}
-        </span>
+        <h2>Documento em andamento</h2>
+        <button type="button" className="btn btn--accent improve-btn" onClick={onPolish} disabled={!hasText} title="Ajustar pontuação e repetições"><Icon name="edit" /> Melhorar texto</button>
       </header>
+      <div className="toolbar" aria-label="Ações do texto">
+        <button type="button" className="btn btn--tiny" onClick={onCopy} disabled={!hasText}><Icon name="copy" /> Copiar</button>
+        <button type="button" className="btn btn--tiny" onClick={onShare} disabled={!hasText}><Icon name="share" /> Compartilhar</button>
+        <button type="button" className="btn btn--ghost font-toggle" onClick={onFontToggle} aria-label="Alternar tamanho do texto" aria-pressed={largeText}>Aa</button>
+        <button type="button" className="btn btn--ghost clear-btn" onClick={onClear} disabled={!hasText} aria-label="Limpar" title="Limpar"><Icon name="trash" /></button>
+      </div>
 
       <textarea
-        ref={textareaRef}
         className="transcript-card__text"
         value={text}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Toque no microfone e comece a falar. O texto aparece aqui — e você pode editar à vontade."
+        placeholder="Suas palavras começam aqui…"
         spellCheck
         autoCorrect="on"
         aria-label="Texto transcrito"
@@ -58,6 +55,7 @@ export function LiveTranscript({
           </p>
         ) : null}
       </div>
+      <div className="document-footer"><span>Você pode editar o texto à vontade.</span><span>Rascunho automático</span></div>
     </section>
   )
 }
