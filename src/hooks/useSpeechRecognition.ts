@@ -147,7 +147,17 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
         const text = result[0]?.transcript ?? ''
         if (result.isFinal) {
           const trimmed = text.trim()
-          if (trimmed) sessionFinals.push(trimmed)
+          if (trimmed) {
+            // Evita bug do Android Chrome disparando a mesma frase várias vezes
+            const lastInSession = sessionFinals.length > 0 ? sessionFinals[sessionFinals.length - 1] : null;
+            const lastInHistory = finalsRef.current.length > 0 ? finalsRef.current[finalsRef.current.length - 1] : null;
+
+            if (lastInSession === trimmed || (!lastInSession && lastInHistory === trimmed)) {
+              // Já ignoramos a duplicata exata
+            } else {
+              sessionFinals.push(trimmed)
+            }
+          }
         } else {
           live += text
         }
