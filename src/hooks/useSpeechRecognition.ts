@@ -5,6 +5,7 @@ import {
   getSpeechRecognitionCtor,
   isFatalSpeechError,
   isSpeechRecognitionSupported,
+  speechContinuation,
 } from '../lib/speech'
 import type { SpeechRecognitionLike } from '../types'
 
@@ -140,26 +141,21 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
 
       const sessionFinals: string[] = []
       let live = ''
+      let confirmed = finalsRef.current.join(' ')
       // A lista é cumulativa: substituir os finais da rodada evita
       // anexar novamente resultados já confirmados.
       for (let i = ignoredResultsRef.current; i < event.results.length; i++) {
         const result = event.results[i]
         const text = result[0]?.transcript ?? ''
         if (result.isFinal) {
-          const trimmed = text.trim()
-          if (trimmed) {
-            // Evita bug do Android Chrome disparando a mesma frase várias vezes
-            const lastInSession = sessionFinals.length > 0 ? sessionFinals[sessionFinals.length - 1] : null;
-            const lastInHistory = finalsRef.current.length > 0 ? finalsRef.current[finalsRef.current.length - 1] : null;
-
-            if (lastInSession === trimmed || (!lastInSession && lastInHistory === trimmed)) {
-              // Já ignoramos a duplicata exata
-            } else {
-              sessionFinals.push(trimmed)
-            }
+          const continuation = speechContinuation(confirmed, text)
+          if (continuation) {
+            sessionFinals.push(continuation)
+            confirmed = [confirmed, continuation].filter(Boolean).join(' ')
           }
         } else {
-          live += text
+          const continuation = speechContinuation([confirmed, live].filter(Boolean).join(' '), text)
+          live = [live, continuation].filter(Boolean).join(' ')
         }
       }
 

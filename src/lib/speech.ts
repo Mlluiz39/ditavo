@@ -13,6 +13,23 @@ export const LANGUAGES: ReadonlyArray<{ code: string; label: string }> = [
 
 export const DEFAULT_LANG = 'pt-BR'
 
+/** Remove sobreposição entre resultados, preservando a grafia do trecho novo. */
+export function speechContinuation(previous: string, incoming: string): string {
+  const words = (value: string) => Array.from(value.matchAll(/[\p{L}\p{N}]+/gu))
+  const before = words(previous)
+  const after = words(incoming)
+  // Uma palavra isolada pode ser repetição intencional ("não, não").
+  for (let size = Math.min(before.length, after.length); size >= 2; size--) {
+    const matches = after.slice(0, size).every((word, index) =>
+      word[0].toLowerCase() === before[before.length - size + index][0].toLowerCase(),
+    )
+    if (matches) {
+      return size === after.length ? '' : incoming.slice(after[size].index).trim()
+    }
+  }
+  return incoming.trim()
+}
+
 /** Retorna o construtor da Web Speech API, se o navegador suportar. */
 export function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   if (typeof window === 'undefined') return null

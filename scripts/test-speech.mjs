@@ -3,6 +3,12 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 
+const speechExports = {}
+vm.runInNewContext(ts.transpileModule(
+  readFileSync(new URL('../src/lib/speech.ts', import.meta.url), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText, { exports: speechExports })
+
 // Executa o hook com o motor e o relógio controlados, sem microfone ou rede.
 function setup() {
   const states = []
@@ -41,6 +47,7 @@ function setup() {
       useCallback: fn => fn,
       useEffect: fn => { cleanup = fn() },
     } : {
+      speechContinuation: speechExports.speechContinuation,
       DEFAULT_LANG: 'pt-BR',
       getSpeechRecognitionCtor: () => Recognition,
       isSpeechRecognitionSupported: () => true,
@@ -117,4 +124,30 @@ f.rec.onerror({ error: 'not-allowed' })
 f.rec.onend()
 assert.equal(f.timers.size, 0, 'permissão negada não reinicia')
 f.cleanup()
+
+const overlap = setup()
+overlap.hook.start()
+overlap.rec.onstart()
+overlap.result(['eu quero'], ['Eu quero testar', false], ['quero testar agora', false])
+assert.equal(overlap.states[3], 'eu quero')
+assert.equal(overlap.states[4], 'testar agora', 'prévia remove sobreposições com finais e parciais')
+overlap.result(['eu quero'], ['Eu quero testar'], ['quero testar agora'])
+assert.equal(overlap.states[3], 'eu quero testar agora', 'finais sobrepostos não duplicam palavras')
+overlap.result(['eu quero'], ['Eu quero testar'], ['quero testar agora'])
+assert.equal(overlap.states[3], 'eu quero testar agora', 'eventos repetidos mantêm o mesmo texto')
+overlap.rec.onend()
+overlap.tick()
+overlap.rec.onstart()
+overlap.result(['testar agora com calma'])
+assert.equal(overlap.states[3], 'eu quero testar agora com calma', 'sobreposição após reinício')
+overlap.hook.stop()
+overlap.rec.onend()
+assert.equal(overlap.states[3], 'eu quero testar agora com calma', 'parada preserva texto sem duplicatas')
+overlap.cleanup()
+
+const { speechContinuation } = speechExports
+assert.equal(speechContinuation('bom dia', 'Bom dia.'), '', 'ignora caixa e pontuação')
+assert.equal(speechContinuation('olá, você', 'OLÁ você está bem?'), 'está bem?')
+assert.equal(speechContinuation('não', 'não quero'), 'não quero', 'preserva repetição de palavra isolada')
+assert.equal(speechContinuation('eu quero', 'viajar amanhã'), 'viajar amanhã', 'preserva trechos distintos')
 console.log('Speech: cenários de repetição, limpeza, parada e reinício passaram.')
