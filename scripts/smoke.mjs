@@ -132,6 +132,39 @@ try {
   await cdp.send('Page.navigate', { url: APP_URL })
   await sleep(2000)
 
+  // 0. Sincroniza o service worker com o build atual ANTES de testar:
+  // logo após um build novo, a primeira navegação vem do SW antigo (HTML
+  // precached velho) enquanto ele apaga os chunks antigos — isso quebrava
+  // a importação lazy do modelo. Também limpa resíduo de share de rodadas
+  // anteriores.
+  const swSync = await evaluate(`
+    (async () => {
+      const cache = await caches.open('blip-vira-texto/share-target')
+      await cache.delete('/__shared_audio__')
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (!reg) return 'sem-registro'
+      await reg.update()
+      const sw = reg.installing || reg.waiting
+      if (sw) {
+        await new Promise((resolve) => {
+          if (sw.state === 'activated') return resolve()
+          const timer = setTimeout(resolve, 8000)
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'activated' || sw.state === 'redundant') {
+              clearTimeout(timer)
+              resolve()
+            }
+          })
+        })
+      }
+      return reg.active?.state ?? 'sem-sw'
+    })()
+  `)
+  // Recarrega para o documento atual ser servido pelo SW já atualizado.
+  await cdp.send('Page.navigate', { url: APP_URL })
+  await sleep(2000)
+  notes.push(`sw após sincronismo: ${swSync}`)
+
   // 1. Renderizou?
   check(
     'app renderiza',
@@ -325,6 +358,20 @@ try {
   // 14. Navega para /?share=1 → o app lê o arquivo e transcreve sozinho
   await cdp.send('Page.navigate', { url: `${APP_URL}?share=1` })
   await sleep(3000)
+  notes.push(`diagnóstico share → href: ${await evaluate(`location.href`)}`)
+  notes.push(
+    `diagnóstico share → step13: sw=${swControlled} guardado=${shared}`,
+  )
+  notes.push(
+    `diagnóstico share → cache: ${await evaluate(
+      `(async () => { const c = await caches.open('blip-vira-texto/share-target'); const r = await c.match('/__shared_audio__'); return r ? 'tem' : 'vazio' })()`,
+    )}`,
+  )
+  notes.push(
+    `diagnóstico share → toast: ${JSON.stringify(
+      (await evaluate(`document.querySelector('.toast')?.textContent ?? ''`)) ?? '',
+    )}`,
+  )
   check(
     'abre direto na aba de arquivo',
     await evaluate(
@@ -347,6 +394,71 @@ try {
   check(
     'URL limpa depois do share',
     await evaluate(`!location.search.includes('share=1')`),
+  )
+
+  // 15. Ctrl+V com CAMINHO de arquivo (copiado da pasta) → orientação, sem poluir o texto
+  const beforePath =
+    (await evaluate(`document.querySelector('.transcript-card__text').value`)) ?? ''
+  await evaluate(`
+    (() => {
+      const dt = new DataTransfer()
+      dt.setData('text/plain', '/home/user/Downloads/AUD-20250101-WA0001.opus')
+      window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }))
+    })()
+  `)
+  await sleep(400)
+  const afterPath =
+    (await evaluate(`document.querySelector('.transcript-card__text').value`)) ?? ''
+  check('caminho colado não entra no texto', afterPath === beforePath)
+  const pasteToast =
+    (await evaluate(`document.querySelector('.toast')?.textContent ?? ''`)) ?? ''
+  check(
+    'orientação de arrastar aparece ao colar caminho',
+    pasteToast.includes('Arraste'),
+    JSON.stringify(pasteToast.slice(0, 70)),
+  )
+
+  // 16. Ctrl+V com ARQUIVO de verdade, partindo da aba 🎤 → troca de aba e transcreve
+  await evaluate(`document.querySelectorAll('.mode-tab')[0]?.click()`)
+  await sleep(300)
+  const pasteResult = await evaluate(`
+    (async () => {
+      try {
+        const res = await fetch('https://upload.wikimedia.org/wikipedia/commons/7/7b/Kim_Kataguiri_e_Arthur_do_Val.ogg')
+        if (!res.ok) return 'sem-amostra'
+        const blob = await res.blob()
+        const dt = new DataTransfer()
+        dt.items.add(new File([blob], 'WA-cola.opus', { type: blob.type || 'audio/ogg' }))
+        window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }))
+        return 'ok'
+      } catch (err) {
+        return 'erro: ' + err.message
+      }
+    })()
+  `)
+  check(
+    'colar arquivo dispara o fluxo',
+    pasteResult === 'ok',
+    String(pasteResult),
+  )
+  check(
+    'colar arquivo troca para a aba de arquivo',
+    await evaluate(
+      `document.querySelectorAll('.mode-tab')[1]?.getAttribute('aria-selected') === 'true'`,
+    ),
+  )
+
+  for (let i = 0; i < 90; i++) {
+    phase = (await evaluate(`document.querySelector('.dropzone')?.dataset.phase ?? 'none'`)) ?? ''
+    transcript = (await evaluate(`document.querySelector('.transcript-card__text').value`)) ?? ''
+    if (phase === 'done' || phase === 'error') break
+    await sleep(2000)
+  }
+  notes.push(`colar arquivo: fase=${phase}`)
+  check(
+    'transcrição do arquivo colado termina e soma ao texto',
+    phase === 'done' && transcript.length > afterPath.length,
+    `fase=${phase} antes=${afterPath.length} depois=${transcript.length}`,
   )
 } catch (err) {
   failures.push(`exceção: ${err.message}`)

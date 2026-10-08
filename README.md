@@ -44,7 +44,10 @@ o arquivo por POST, o worker guarda e o app lê ao abrir. **Restrições:**
 - **iPhone**: o Safari ainda não suporta `share_target` (bug do WebKit
   194593) → use *Encaminhar como arquivo* → salvar → abrir o app e escolher;
 - **PC (WhatsApp Web)**: não existe folha de compartilhamento do sistema para
-  sites → baixe o áudio e arraste para a janela (ou Ctrl+V).
+  sites → baixe o áudio e arraste para a janela. Ctrl+V só funciona se o
+  *arquivo* estiver no clipboard (copiado de outro site, por exemplo);
+  copiar o arquivo na pasta e colar cola o *caminho* — o navegador não
+  permite abrir caminhos — nesse caso use arrastar ou *Escolher arquivo*.
 
 > O Whisper **não sai do seu dispositivo**: o modelo (~40 MB) é baixado uma vez
 > do Hugging Face, fica cacheado no navegador e as inferências são locais.

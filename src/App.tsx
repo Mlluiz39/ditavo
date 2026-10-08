@@ -14,6 +14,15 @@ import type { HistoryItem } from './types'
 
 type InputMode = 'live' | 'file'
 
+/** Texto que "parece" caminho/nome de arquivo de áudio colado do gerenciador. */
+const AUDIO_FILE_TEXT = /\b[\w./\\~-]+\.(opus|ogg|oga|mp4|m4a|aac|mp3|wav|webm|amr|flac)\b/i
+
+/** Erro de chunk de JS antigo (deploy novo apagou o arquivo que o HTML
+ *  antigo referenciava) — o remédio é recarregar uma vez. */
+const STALE_ASSET_RE =
+  /dynamically imported module|Importing a module script failed|error loading dynamically imported module/i
+const RELOAD_GUARD_KEY = 'blip-vira-texto/recarregou'
+
 export default function App() {
   const speech = useSpeechRecognition()
   const history = useTranscriptHistory()
@@ -64,62 +73,101 @@ export default function App() {
     speech.start()
   }
 
-  const switchMode = (next: InputMode) => {
-    if (next === mode) return
-    // Não ficar com o microfone aberto escondido atrás da aba de arquivo.
-    if (next === 'file' && speech.active) speech.stop()
-    setMode(next)
-  }
+  const { active: speechActive, stop: speechStop } = speech
+  const switchMode = useCallback(
+    (next: InputMode) => {
+      if (next === mode) return
+      // Não ficar com o microfone aberto escondido atrás da aba de arquivo.
+      if (next === 'file' && speechActive) speechStop()
+      setMode(next)
+    },
+    [mode, speechActive, speechStop],
+  )
 
+  /** Transcreve e anexa ao texto. 'recarregando' = deu erro de asset velho
+   *  e a página vai recarregar (quem chama decide se apaga o arquivo). */
   const handleAudioFile = useCallback(
-    async (file: File) => {
+    async (file: File): Promise<'ok' | 'falha' | 'recarregando'> => {
       if (!isAudioLike(file)) {
         showToast('Isso não parece um arquivo de áudio')
-        return
+        return 'falha'
       }
       try {
         const transcribed = await audio.transcribe(file, whisperLanguageFor(speech.lang))
         if (!transcribed) {
           showToast('Áudio lido, mas não encontrei fala nele')
-          return
+          return 'falha'
         }
         editedRef.current = true
         setText((current) =>
           current.trim() ? `${current.trimEnd()}\n\n${transcribed}` : transcribed,
         )
+        sessionStorage.removeItem(RELOAD_GUARD_KEY)
         showToast('Áudio transcrito e adicionado ao texto!')
+        return 'ok'
       } catch (err) {
+        // Chunk antigo logo após um deploy: recarrega uma vez e tenta de novo
+        // (a página recarregada já recebe os arquivos novos do service worker).
+        if (
+          err instanceof Error &&
+          STALE_ASSET_RE.test(err.message) &&
+          !sessionStorage.getItem(RELOAD_GUARD_KEY)
+        ) {
+          sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
+          showToast('Atualizando os arquivos do app…')
+          window.location.reload()
+          return 'recarregando'
+        }
         showToast(
           err instanceof Error && err.message ? err.message : 'Erro ao transcrever o áudio',
         )
+        return 'falha'
       }
     },
     [audio, speech.lang, showToast],
   )
 
-  // Colar (Ctrl+V) um arquivo de áudio enquanto a aba de arquivo está aberta.
+  // Colar (Ctrl+V):
+  // - arquivo de verdade no clipboard → transcreve (em qualquer aba);
+  // - caminho de arquivo vindo do gerenciador de arquivos → o navegador não
+  //   deixa abrir por segurança, então mostramos a orientação certa em vez
+  //   de poluir o texto com o caminho.
   useEffect(() => {
-    if (mode !== 'file') return
     const onPaste = (event: ClipboardEvent) => {
       const file = event.clipboardData?.files?.[0]
       if (file) {
         event.preventDefault()
+        if (mode !== 'file') switchMode('file')
         void handleAudioFile(file)
+        return
+      }
+      const text = (event.clipboardData?.getData('text') ?? '').trim()
+      if (text && AUDIO_FILE_TEXT.test(text)) {
+        event.preventDefault()
+        showToast(
+          'Isso é o caminho de um arquivo, não o arquivo — o navegador não abre caminhos colados. Arraste o arquivo da pasta para dentro desta janela, ou use 📁 → Escolher arquivo.',
+        )
       }
     }
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
-  }, [mode, handleAudioFile])
+  }, [mode, switchMode, handleAudioFile, showToast])
 
   // Arquivo vindo da folha "Compartilhar" do celular (share_target).
   // O service worker guardou o áudio e redirecionou para /?share=1.
+  // Importante: roda UMA vez (guard por ref) e não é cancelado no meio por
+  // re-renders — senão o cache é apagado sem chegar a transcrever. Também
+  // consome um arquivo "órfão" deixado por uma navegação interrompida.
+  const shareHandledRef = useRef(false)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('share') !== '1') return
-    // Limpa a URL imediatamente: reexecuções do efeito não repetem o fluxo.
-    window.history.replaceState({}, '', window.location.pathname)
+    if (shareHandledRef.current) return
+    shareHandledRef.current = true
 
-    let cancelled = false
+    const hasShareParam = new URLSearchParams(window.location.search).get('share') === '1'
+    if (hasShareParam) {
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+
     void (async () => {
       try {
         // Espelha SHARE_CACHE/SHARE_KEY de src/sw.js
@@ -129,23 +177,21 @@ export default function App() {
           const blob = await response.blob()
           const rawName = response.headers.get('X-File-Name')
           const name = rawName ? decodeURIComponent(rawName) : 'audio'
-          await cache.delete('/__shared_audio__')
           const file = new File([blob], name, { type: blob.type })
-          if (!cancelled) {
-            setMode('file')
-            await handleAudioFile(file)
+          setMode('file')
+          const result = await handleAudioFile(file)
+          // Só apaga depois: se houver recarga (asset velho), o arquivo fica
+          // no cache e a página nova retoma a transcrição sozinha.
+          if (result !== 'recarregando') {
+            await cache.delete('/__shared_audio__')
           }
-        } else if (!cancelled) {
+        } else if (hasShareParam) {
           showToast('Não recebi o arquivo compartilhado')
         }
       } catch {
-        if (!cancelled) showToast('Não consegui abrir o arquivo compartilhado')
+        if (hasShareParam) showToast('Não consegui abrir o arquivo compartilhado')
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [handleAudioFile, showToast])
 
   const handleTextChange = (value: string) => {

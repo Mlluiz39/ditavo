@@ -97,9 +97,15 @@ export function AudioDropzone({
       />
 
       <p className="dropzone__hint">
-        <strong>Como pegar o áudio:</strong> no PC, WhatsApp Web/Computador → menu ⋮ do
-        áudio → <em>Baixar</em> (ou Exportar conversa). No celular → segure o áudio →{' '}
-        <em>Compartilhar</em> → <em>Encaminhar como arquivo</em> → salve nos Arquivos.
+        <strong>No PC:</strong> arraste o arquivo da pasta (ex.: Downloads) para dentro
+        desta janela ou clique em <em>Escolher arquivo</em> — Ctrl+V só funciona se o
+        arquivo estiver no clipboard; caminho de arquivo não abre. Para pegar o áudio:
+        WhatsApp Web/Computador → menu ⋮ do áudio → <em>Baixar</em>.
+      </p>
+      <p className="dropzone__hint">
+        <strong>No celular:</strong> com o app instalado → WhatsApp → segure o áudio →{' '}
+        <em>Compartilhar</em> → <em>ViraTexto</em>. Sem app instalado →{' '}
+        <em>Encaminhar como arquivo</em> → salve em Arquivos e escolha aqui.
       </p>
       <p className="dropzone__hint dropzone__hint--ok">
         🔒 O áudio não sai do seu dispositivo: a transcrição roda no seu navegador
