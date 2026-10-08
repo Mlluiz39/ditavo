@@ -28,8 +28,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {
-        name: 'Blip Vira Texto',
-        short_name: 'ViraTexto',
+        name: 'ditavo',
+        short_name: 'ditavo',
         description:
           'Fale e receba o texto. Transcrição de voz ao vivo, grátis e no seu dispositivo.',
         lang: 'pt-BR',
@@ -51,7 +51,7 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
-        // WhatsApp (Android) → Compartilhar → ViraTexto: o SO manda o
+        // WhatsApp (Android) → Compartilhar → ditavo: o SO manda o
         // arquivo via POST e o service worker entrega ao app.
         share_target: {
           action: '/',

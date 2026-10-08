@@ -260,7 +260,7 @@ export default function App() {
     }
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Blip Vira Texto', text: content })
+        await navigator.share({ title: 'ditavo', text: content })
         return
       } catch (err) {
         // Cancelado pelo usuário: não faz nada.
@@ -319,7 +319,7 @@ export default function App() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `blip-vira-texto-${new Date().toISOString().slice(0, 10)}.txt`
+    link.download = `ditavo-${new Date().toISOString().slice(0, 10)}.txt`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -371,7 +371,7 @@ export default function App() {
             </svg>
           </span>
           <div className="brand__text">
-            <strong>Blip Vira Texto</strong>
+            <strong>ditavo</strong>
             <span>fale, edite e compartilhe — sem conta e sem API paga</span>
           </div>
         </div>

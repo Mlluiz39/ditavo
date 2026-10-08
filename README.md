@@ -1,4 +1,4 @@
-# Blip Vira Texto 🎙️➡️📝
+# ditavo 🎙️➡️📝
 
 Transforma voz em texto — **no seu dispositivo, de graça e sem servidor**.
 Inspirado no bot *Blip Vira Texto* (+55 31 7228-0540), mas sem depender de
@@ -35,7 +35,7 @@ webm. No iPhone/Safari o `.ogg` é lido por um decoder WASM embutido.
 Com o **app instalado** no Android, o fluxo fica igual ao do Blip — sem baixar
 nada:
 
-> WhatsApp → segure o áudio → **Compartilhar** → **ViraTexto** → ele abre e
+> WhatsApp → segure o áudio → **Compartilhar** → **ditavo** → ele abre e
 > já transcreve.
 
 Isso funciona via `share_target` no manifesto + service worker: o sistema manda

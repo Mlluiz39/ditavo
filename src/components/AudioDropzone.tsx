@@ -104,7 +104,7 @@ export function AudioDropzone({
       </p>
       <p className="dropzone__hint">
         <strong>No celular:</strong> com o app instalado → WhatsApp → segure o áudio →{' '}
-        <em>Compartilhar</em> → <em>ViraTexto</em>. Sem app instalado →{' '}
+        <em>Compartilhar</em> → <em>ditavo</em>. Sem app instalado →{' '}
         <em>Encaminhar como arquivo</em> → salve em Arquivos e escolha aqui.
       </p>
       <p className="dropzone__hint dropzone__hint--ok">
