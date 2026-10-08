@@ -1,26 +1,26 @@
 /**
  * Service worker do Blip Vira Texto.
  *
- * 1. Cache offline dos assets (precache do Workbox).
- * 2. Recebe o arquivo enviado pela folha "Compartilhar" do Android
- *    (share_target POST), guarda em Cache Storage e redireciona o app
- *    para /?share=1, onde a página lê e transcreve.
+ * 1. Precache dos assets (Workbox, sem roteamento automático).
+ * 2. Navegações: REDE PRIMEIRO — sempre serve o index.html do build atual
+ *    (o precache fica só para offline). Sem isso, um deploy novo deixa o
+ *    HTML antigo referenciando chunks já apagados e a transcrição falha com
+ *    "Failed to fetch dynamically imported module".
+ * 3. Assets com hash: cache primeiro, senão rede.
+ * 4. share_target: recebe o POST da folha "Compartilhar" do Android, guarda
+ *    o áudio em Cache Storage e redireciona para /?share=1, onde a página
+ *    lê e transcreve.
  *
  * Os nomes SHARE_CACHE/SHARE_KEY precisam bater com os do src/App.tsx.
  */
-import {
-  cleanupOutdatedCaches,
-  createHandlerBoundToURL,
-  precacheAndRoute,
-} from 'workbox-precaching'
+import { cleanupOutdatedCaches, precache } from 'workbox-precaching'
 
 const SHARE_CACHE = 'blip-vira-texto/share-target'
 const SHARE_KEY = '/__shared_audio__'
 
-// Conserta o precache e serve o index.html para SPA offline.
-precacheAndRoute(self.__WB_MANIFEST)
+// Só baixa/atualiza o precache; o roteamento é manual (ver fetch abaixo).
+precache(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
-const pageHandler = createHandlerBoundToURL('/index.html')
 
 self.skipWaiting()
 self.clients.claim()
@@ -39,12 +39,32 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Navegação com query (?share=1) não casa com o precache: tenta a rede
-  // e, se estiver offline, cai no index.html. Navegações sem query são
-  // resolvidas pelo precache (não respondemos para não conflitar).
-  if (request.mode === 'navigate' && url.search) {
-    event.respondWith(fetch(request).catch(() => pageHandler(event)))
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return
+
+  // Navegação: rede primeiro (HTML fresco a cada build), offline volta ao
+  // index.html do precache.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(request)
+        } catch {
+          const cached = await caches.match('/index.html')
+          if (cached) return cached
+          return Response.error()
+        }
+      })(),
+    )
+    return
   }
+
+  // Assets: cache primeiro (URLs têm hash), senão rede.
+  event.respondWith(
+    (async () => {
+      const cached = await caches.match(request)
+      return cached ?? (await fetch(request))
+    })(),
+  )
 })
 
 async function handleSharedFile(request) {

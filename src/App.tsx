@@ -22,6 +22,8 @@ const AUDIO_FILE_TEXT = /\b[\w./\\~-]+\.(opus|ogg|oga|mp4|m4a|aac|mp3|wav|webm|a
 const STALE_ASSET_RE =
   /dynamically imported module|Importing a module script failed|error loading dynamically imported module/i
 const RELOAD_GUARD_KEY = 'blip-vira-texto/recarregou'
+/** Rascunho do editor: sobrevive a recargas (automáticas ou do usuário). */
+const DRAFT_KEY = 'blip-vira-texto/rascunho'
 
 export default function App() {
   const speech = useSpeechRecognition()
@@ -29,9 +31,28 @@ export default function App() {
   const audio = useAudioTranscription()
   const { canInstall, install } = usePWAInstall()
 
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => {
+    try {
+      return localStorage.getItem(DRAFT_KEY) ?? ''
+    } catch {
+      return ''
+    }
+  })
   const [mode, setMode] = useState<InputMode>('live')
   const [toast, setToast] = useState<string | null>(null)
+
+  // Persiste o rascunho (debounce): uma recarga — inclusive a automática
+  // pós-deploy — não pode perder o texto que o usuário já tem na tela.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, text)
+      } catch {
+        // Armazenamento indisponível: segue sem rascunho.
+      }
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [text])
 
   /** Texto que o editor tinha quando a gravação atual começou. */
   const baseRef = useRef('')

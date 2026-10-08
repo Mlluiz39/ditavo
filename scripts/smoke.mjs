@@ -141,6 +141,7 @@ try {
     (async () => {
       const cache = await caches.open('blip-vira-texto/share-target')
       await cache.delete('/__shared_audio__')
+      localStorage.removeItem('blip-vira-texto/rascunho')
       const reg = await navigator.serviceWorker.getRegistration()
       if (!reg) return 'sem-registro'
       await reg.update()
