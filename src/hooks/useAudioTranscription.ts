@@ -10,7 +10,7 @@ export type TranscriptionPhase =
   | 'done'
   | 'error'
 
-export type ModelSize = 'tiny' | 'base'
+export type ModelSize = 'tiny' | 'base' | 'small'
 
 interface ModelInfo {
   id: string
@@ -18,10 +18,12 @@ interface ModelInfo {
   size: string
 }
 
-/** Modelos Whisper (Hugging Face) — baixados uma vez e cacheados no navegador. */
+/** Modelos Whisper (Hugging Face) — baixados uma vez e cacheados no navegador.
+ *  Tamanhos = encoder + decoder quantizado (o download real, em memória local). */
 export const WHISPER_MODELS: Record<ModelSize, ModelInfo> = {
   tiny: { id: 'Xenova/whisper-tiny', label: 'Rápido', size: '~40 MB' },
-  base: { id: 'Xenova/whisper-base', label: 'Melhor qualidade', size: '~80 MB' },
+  base: { id: 'Xenova/whisper-base', label: 'Melhor qualidade', size: '~75 MB' },
+  small: { id: 'Xenova/whisper-small', label: 'Precisão máxima', size: '~240 MB' },
 }
 
 export interface AudioTranscriptionState {
@@ -50,10 +52,12 @@ const STORAGE_MODEL_KEY = 'blip-vira-texto/whisper-model'
 function loadStoredModel(): ModelSize {
   try {
     const stored = window.localStorage.getItem(STORAGE_MODEL_KEY)
-    return stored === 'base' ? 'base' : 'tiny'
+    if (stored === 'tiny' || stored === 'base' || stored === 'small') return stored
   } catch {
-    return 'tiny'
+    // sem localStorage: usa o padrão
   }
+  // Padrão "Melhor qualidade": o tiny erra mais palavras em áudio real.
+  return 'base'
 }
 
 async function loadPipeline(

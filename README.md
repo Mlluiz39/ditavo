@@ -49,10 +49,10 @@ o arquivo por POST, o worker guarda e o app lê ao abrir. **Restrições:**
   copiar o arquivo na pasta e colar cola o *caminho* — o navegador não
   permite abrir caminhos — nesse caso use arrastar ou *Escolher arquivo*.
 
-> O Whisper **não sai do seu dispositivo**: o modelo (~40 MB) é baixado uma vez
-> do Hugging Face, fica cacheado no navegador e as inferências são locais.
-> No celular a primeira vez pode demorar um pouco mais — modelos "Rápido" e
-> "Melhor qualidade" são trocáveis no app.
+> O Whisper **não sai do seu dispositivo**: o modelo (40 MB a 240 MB, conforme a
+> escolha) é baixado uma vez do Hugging Face, fica cacheado no navegador e as
+> inferências são locais. Padrão: **Melhor qualidade** (~75 MB) — os três modelos
+> ("Rápido", "Melhor qualidade", "Precisão máxima") são trocáveis no app.
 
 ## Rodando
 
@@ -132,8 +132,8 @@ Sem esses headers tudo funciona, só cai para um thread (mais lento).
 ## Limitações
 
 - Áudio sem fala (silêncio) volta com aviso — sem texto para adicionar;
-- Modelos muito pequenos erram nomes próprios e termos técnicos: use o modelo
-  "Melhor qualidade" quando a precisão importar;
+- O padrão já é o modelo "Melhor qualidade"; se ainda errar nomes próprios ou
+  termos técnicos, use "Precisão máxima" (~240 MB, mais lento no celular);
 - No Android o fluxo é *Compartilhar → transcreve*; no iPhone e no PC é
   *salvar → escolher/arrastar* (limitação do navegador, não do app);
 - Para receber o áudio **dentro** do WhatsApp sem compartilhar nada (estilo
