@@ -13,13 +13,38 @@ export const LANGUAGES: ReadonlyArray<{ code: string; label: string }> = [
 
 export const DEFAULT_LANG = 'pt-BR'
 
+/** Corrige palavras consecutivas duplicadas pelo ditado, sem cruzar pontuação. */
+export function cleanSpeechRepeats(text: string): string {
+  let cleaned = ''
+  let cursor = 0
+  let previous = ''
+  for (const word of text.matchAll(/[\p{L}\p{N}]+/gu)) {
+    const gap = text.slice(cursor, word.index)
+    const normalized = word[0].toLowerCase()
+    if (normalized !== previous || !/^\s+$/.test(gap) || !/\p{L}/u.test(word[0])) {
+      cleaned += gap + word[0]
+    }
+    previous = normalized
+    cursor = word.index + word[0].length
+  }
+  return (cleaned + text.slice(cursor)).trim()
+}
+
 /** Remove sobreposição entre resultados, preservando a grafia do trecho novo. */
 export function speechContinuation(previous: string, incoming: string): string {
+  incoming = cleanSpeechRepeats(incoming)
   const words = (value: string) => Array.from(value.matchAll(/[\p{L}\p{N}]+/gu))
   const before = words(previous)
   const after = words(incoming)
-  // Uma palavra isolada pode ser repetição intencional ("não, não").
-  for (let size = Math.min(before.length, after.length); size >= 2; size--) {
+  for (let size = Math.min(before.length, after.length); size >= 1; size--) {
+    if (size === 1) {
+      const last = before[before.length - 1]
+      // Preserva "não, não" e números repetidos. Só corta uma palavra
+      // na fronteira quando não há pontuação separando os dois trechos.
+      if (!/\p{L}/u.test(last[0]) ||
+          !/^\s*$/.test(previous.slice(last.index + last[0].length)) ||
+          !/^\s*$/.test(incoming.slice(0, after[0].index))) continue
+    }
     const matches = after.slice(0, size).every((word, index) =>
       word[0].toLowerCase() === before[before.length - size + index][0].toLowerCase(),
     )
